@@ -32,6 +32,8 @@ int32_t ulat, ulon;
 uint8_t zoom = 12;
 uint8_t rowN = 0;
 
+bool _lighton = false;
+
 const uint8_t mapW = 144;       //window.layer.frame.size.w;
 const uint8_t mapH = 168-16;    //window.layer.frame.size.h;
 
@@ -71,9 +73,9 @@ void request_location() {
 
 void next_rows() {
     DictionaryIterator* req;
-	http_out_get("http://wristmap.argyl.es/api/v1", rowN, &req);
+    http_out_get("http://wristmap.argyl.es/api/v1", rowN, &req);
     dict_write_int32(req, MAP_KEY_ULAT, ulat);
-	dict_write_int32(req, MAP_KEY_ULON, ulon);
+    dict_write_int32(req, MAP_KEY_ULON, ulon);
     dict_write_int32(req, MAP_KEY_ZOOM, zoom);
     dict_write_int32(req, MAP_KEY_ROW, rowN);
     http_out_send();
@@ -106,6 +108,22 @@ void trigger_location(ClickRecognizerRef rec, void* ctx) {
     request_location();
 }
 
+void backlight_activator(ClickRecognizerRef recognizer, Window *window) {
+    if(_lighton==false){
+        light_enable(true); 
+        light_enable_interaction();     
+        vibes_short_pulse();
+        _lighton=true;
+    }
+    else {
+        light_enable(false);
+        vibes_short_pulse();
+        _lighton=false;
+    }
+
+}
+
+
 void rcv_location(float lat, float lon, float alt, float acc, void* ctx) {
     ulat = lat * 1e6;
     ulon = lon * 1e6;
@@ -123,14 +141,14 @@ void rcv_resp(int32_t tok, int code, DictionaryIterator* res, void* ctx) {
     Tuple* row = dict_find(res, MAP_KEY_ROW);
     if (row) {
         APP_LOG(APP_LOG_LEVEL_DEBUG, "Received %i bytes for row %i (%i)", row->length, rowN, code);
-		uint8_t* currData = row->value->data;
-		uint8_t currLength = row->length;
-		while (currLength >= 18) {
-			memcpy(imgData+20*rowN, currData, 18);
-			currData += 18;
-			currLength -= 18;
-			rowN += 1;
-		}
+        uint8_t* currData = row->value->data;
+        uint8_t currLength = row->length;
+        while (currLength >= 18) {
+            memcpy(imgData+20*rowN, currData, 18);
+            currData += 18;
+            currLength -= 18;
+            rowN += 1;
+        }
         if (rowN < mapH) next_rows();
         else reschedule_locTimer();
         layer_mark_dirty((Layer*)&map.layer);
@@ -150,6 +168,7 @@ void click_config(ClickConfig** config, void* ctx) {
     config[BUTTON_ID_DOWN]->context = (void*)(uintptr_t)false;
     config[BUTTON_ID_SELECT]->click.handler = trigger_location;
     config[BUTTON_ID_SELECT]->click.repeat_interval_ms = 1e3;
+    config[BUTTON_ID_SELECT]->long_click.handler = (ClickHandler) backlight_activator;
 }
 
 void handle_init(AppContextRef ctx) {
@@ -187,6 +206,11 @@ void handle_init(AppContextRef ctx) {
     bitmap_layer_set_bitmap(&dot, &dotImg);
     //bitmap_layer_set_compositing_mode(&dot, GCompOpAssignInverted);
     layer_add_child(&window.layer, (Layer*)&dot.layer);
+}
+
+void handle_deinit(AppContextRef ctx) {
+    light_enable(false);        
+    _lighton=false;
 }
 
 void handle_timer(AppContextRef ctx, AppTimerHandle hdl, uint32_t tok) {
