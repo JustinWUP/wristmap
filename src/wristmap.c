@@ -29,7 +29,7 @@ uint8_t imgData[3360] = {0};        // 144x168 with rows padded to 32-bit word, 
 
 AppTimerHandle locTimer = APP_TIMER_INVALID_HANDLE;
 int32_t ulat, ulon;
-uint8_t zoom = 12;
+uint8_t zoom = 17;
 uint8_t rowN = 0;
 
 bool _lighton = false;
@@ -223,6 +223,7 @@ void handle_timer(AppContextRef ctx, AppTimerHandle hdl, uint32_t tok) {
 void pbl_main(void *params) {
     PebbleAppHandlers handlers = {
         .init_handler = &handle_init,
+        .deinit_handler = &handle_deinit,
         .timer_handler = &handle_timer,
         .messaging_info = {
             .buffer_sizes = {
